@@ -1,0 +1,62 @@
+name: Harbor route
+description: Reach Harbor from a GitHub-hosted runner through the tunnel's TCP route, logged in and ready to push.
+
+inputs:
+  access-client-id:
+    description: Cloudflare Access service token ID for the route
+    required: true
+  access-client-secret:
+    description: Cloudflare Access service token secret for the route
+    required: true
+  username:
+    description: Harbor robot account name
+    required: true
+  password:
+    description: Harbor robot account secret
+    required: true
+  registry:
+    description: Registry hostname, pointed at loopback for the rest of the job
+    default: harbor.bde-dev.net
+  route:
+    description: TCP route hostname on the tunnel
+    default: harbor-push.bde-dev.net
+
+runs:
+  using: composite
+  steps:
+    # The registry name resolves to loopback, where cloudflared carries Harbor's own TLS
+    # over the route. This has to exist before any builder container starts, because a
+    # container on the host network copies the hosts file when it is created.
+    - name: Open the route
+      shell: bash
+      env:
+        TUNNEL_SERVICE_TOKEN_ID: ${{ inputs.access-client-id }}
+        TUNNEL_SERVICE_TOKEN_SECRET: ${{ inputs.access-client-secret }}
+        REGISTRY: ${{ inputs.registry }}
+        ROUTE: ${{ inputs.route }}
+      run: |
+        echo "127.0.0.1 ${REGISTRY}" | sudo tee -a /etc/hosts > /dev/null
+        docker run --detach --name harbor-route --network host --user 0 \
+          --env TUNNEL_SERVICE_TOKEN_ID --env TUNNEL_SERVICE_TOKEN_SECRET \
+          cloudflare/cloudflared:2026.10.7 access tcp --hostname "${ROUTE}" --url 127.0.0.1:443
+        for _ in $(seq 1 30); do
+          if [ "$(curl -s -o /dev/null -w '%{http_code}' "https://${REGISTRY}/v2/")" = 401 ]; then
+            echo "Harbor answers through the route"
+            exit 0
+          fi
+          sleep 2
+        done
+        docker logs harbor-route
+        echo "Harbor did not answer through the route" >&2
+        exit 1
+
+    # BuildKit on the host network shares that loopback and hosts entry.
+    - uses: docker/setup-buildx-action@v4
+      with:
+        driver-opts: network=host
+
+    - uses: docker/login-action@v4
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}

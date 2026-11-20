@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "labels": ["renovate"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The cloudflared image the action runs",
+      "managerFilePatterns": ["/^action\\.yml$/"],
+      "matchStrings": ["(?<depName>cloudflare/cloudflared):(?<currentValue>[0-9.]+)"],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}
