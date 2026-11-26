@@ -38,7 +38,7 @@ runs:
         echo "127.0.0.1 ${REGISTRY}" | sudo tee -a /etc/hosts > /dev/null
         docker run --detach --name harbor-route --network host --user 0 \
           --env TUNNEL_SERVICE_TOKEN_ID --env TUNNEL_SERVICE_TOKEN_SECRET \
-          cloudflare/cloudflared:2026.10.7 access tcp --hostname "${ROUTE}" --url 127.0.0.1:443
+          cloudflare/cloudflared:2026.11.2 access tcp --hostname "${ROUTE}" --url 127.0.0.1:443
         for _ in $(seq 1 30); do
           if [ "$(curl -s -o /dev/null -w '%{http_code}' "https://${REGISTRY}/v2/")" = 401 ]; then
             echo "Harbor answers through the route"
